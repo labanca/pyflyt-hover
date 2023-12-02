@@ -1,0 +1,6 @@
+wheel
+numpy
+pyflyt
+pettingzoo
+supersuit
+stable_baselines3
