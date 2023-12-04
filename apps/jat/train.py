@@ -29,7 +29,7 @@ def train_pyflyt_supersuit(
     print(f"Starting training on {str(env.metadata['name'])}.")
 
     env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 1, num_cpus=10, base_class="stable_baselines3")
+    env = ss.concat_vec_envs_v1(env, 2, num_cpus=10, base_class="stable_baselines3")
 
 
     batch_size = 256
@@ -131,8 +131,8 @@ if __name__ == "__main__":
     env_fn = hover_v0
 
     # mode 0: vp, vq, vr, T: angular velocities + Thrust
-    start_pos = np.array([[-1.0, 1.0, 2.0]])
-    #start_pos = np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]])
+    #start_pos = np.array([[-1.0, 1.0, 2.0]])
+    start_pos = np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]])
     #start_pos = np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0], [-1.0, 1.0, 1.0],[1.0, -1.0, 1.0], [-1.0, 1.0, 2.0], [-2.0, 2.0, 1.0], [-2.0, 1.0, 1.0] ])
     start_orn = np.zeros_like (start_pos)
 
@@ -142,7 +142,7 @@ if __name__ == "__main__":
         'start_orn': start_orn,
     }
 
-    steps = 1_000_000
+    steps = 4_000_000
 
     # Train a model (takes ~3 minutes on GPU)
     #train_pyflyt_supersuit(env_fn, steps=steps, seed=42,  **env_kwargs)
