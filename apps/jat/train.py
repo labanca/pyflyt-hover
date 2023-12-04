@@ -5,10 +5,10 @@ import os
 import time
 import numpy as np
 import supersuit as ss
+import torch
 
 from stable_baselines3 import PPO
 from stable_baselines3.ppo import MlpPolicy
-from stable_baselines3.common.utils import get_device
 from datetime import datetime
 
 from envs.jat import hover_v0
@@ -22,7 +22,8 @@ def train_pyflyt_supersuit(
     env = env_fn.parallel_env(**env_kwargs)
     #env = ss.black_death_v3(env)
 
-    device = get_device(device='cpu')
+    #device = get_device(device='cpu')
+    device = torch.device(device='cpu')
     env.reset(seed=seed)
 
     print(f"Starting training on {str(env.metadata['name'])}.")
@@ -30,11 +31,9 @@ def train_pyflyt_supersuit(
     env = ss.pettingzoo_env_to_vec_env_v1(env)
     env = ss.concat_vec_envs_v1(env, 1, num_cpus=10, base_class="stable_baselines3")
 
-    buffer_size = 10_000_000
-    batch_size = 256
-    n_envs = 1
-    lr = 0.0007
 
+    batch_size = 256
+    lr = 0.0007
     nn_t = [128, 128, 128]
     policy_kwargs = dict(
         #normalize_images=False,
@@ -48,6 +47,7 @@ def train_pyflyt_supersuit(
         learning_rate=lr,
         batch_size=batch_size,
         policy_kwargs=policy_kwargs,
+        device=device
     )
 
     model.learn(total_timesteps=steps)
@@ -58,6 +58,7 @@ def train_pyflyt_supersuit(
     with open(f'{model_name}.txt', 'w') as file:
         # Write a string to the file
         file.write(f'{model.num_timesteps=}\n')
+        file.write(f'{device=}\n')
         start_datetime = datetime.fromtimestamp(model.start_time / 1e9)
         current_time = datetime.now()
         elapsed_time = current_time - start_datetime
@@ -68,6 +69,7 @@ def train_pyflyt_supersuit(
         file.write(f'{model.device=}\n')
         file.write(f'{model.learning_rate=}\n')
         file.write(f'{model.policy=}\n')
+
 
     print(f"Finished training on {str(env.unwrapped.metadata['name'])}.")
 
@@ -113,7 +115,8 @@ def eval(env_fn, num_games: int = 100, render_mode: str | None = None, **env_kwa
                 act = model.predict(obs, deterministic=True)[0]
 
             env.step(act)
-            print(f'{env.env.aviary.elapsed_time=}{env.terminations=}{env.truncations=}')
+            print(f'{agent=}')
+            print(f'{env.terminations=}{env.truncations=}')
             print(f'{act}')
             print(reward)
     env.close()
@@ -132,15 +135,14 @@ if __name__ == "__main__":
     #start_pos = np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]])
     #start_pos = np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0], [-1.0, 1.0, 1.0],[1.0, -1.0, 1.0], [-1.0, 1.0, 2.0], [-2.0, 2.0, 1.0], [-2.0, 1.0, 1.0] ])
     start_orn = np.zeros_like (start_pos)
-    drone_type = ["quadx"] * start_pos.shape[0]
+
 
     env_kwargs = {
         'start_pos': start_pos,
         'start_orn': start_orn,
-        #'render_mode': None,
     }
 
-    steps = 300_000
+    steps = 1_000_000
 
     # Train a model (takes ~3 minutes on GPU)
     #train_pyflyt_supersuit(env_fn, steps=steps, seed=42,  **env_kwargs)
