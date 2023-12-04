@@ -9,13 +9,13 @@ from PyFlyt.core import Aviary
 from pettingzoo.utils.conversions import parallel_wrapper_fn
 
 
-def hover_env(render_mode=None, *args, **kwargs):
+def hover_env(render_mode=None, **kwargs):
     """
     The env function often wraps the environment in wrappers by default.
     You can find full documentation for these methods
     elsewhere in the developer documentation.
     """
-    env = raw_hover_env(render_mode=render_mode, *args, **kwargs)
+    env = raw_hover_env(render_mode=render_mode, **kwargs)
     env = wrappers.AssertOutOfBoundsWrapper(env)
     env = wrappers.OrderEnforcingWrapper(env)
     return env
@@ -36,13 +36,22 @@ class raw_hover_env(AECEnv, EzPickle):
                  start_pos = np.array([[-1.0, 0.0, 1.0], [1.0, 0.0, 1.0]]),
                  start_orn = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]),
                  render_mode=None,
+                 agent_hz: int = 30,
+                 max_duration_seconds: float = 10.0,
                  *args, **kwargs
                 ):
-        EzPickle.__init__(self, *args, **kwargs)
+        EzPickle.__init__(self, start_pos,  start_orn, render_mode, agent_hz, max_duration_seconds, *args, **kwargs)
+        AECEnv.__init__(self)
+
+        super().__init__()
+
         self._start_pos = start_pos
         self._start_orn = np.zeros_like(self._start_pos)
         num_agents = len(self._start_pos)
-        self.step_limit = 6000
+        #self.step_limit = 300
+        self.max_steps = int(agent_hz * max_duration_seconds)
+        self.env_step_ratio = int(120 / agent_hz)
+
 
         self.render_mode = render_mode is not None
         self.aviary = Aviary(
@@ -87,7 +96,8 @@ class raw_hover_env(AECEnv, EzPickle):
             shape=(
                 12
                 + self.action_space(None).shape[0]  # pyright: ignore
-                + auxiliary_space.shape[0],  # pyright: ignore
+                + auxiliary_space.shape[0] # pyright: ignore
+                + 3,
             ),
             dtype=np.float64,
         )
@@ -128,6 +138,7 @@ class raw_hover_env(AECEnv, EzPickle):
                 *lin_pos,
                 *self._past_actions[agent_id],
                 *self.aviary.aux_state(0),
+                *self._start_pos[agent_id]
             ]
         )
 
@@ -166,6 +177,8 @@ class raw_hover_env(AECEnv, EzPickle):
         )
         self.aviary.set_mode(0)
 
+
+
     def step(self, action):
         """
         step(action) takes in an action for the current agent (specified by
@@ -188,27 +201,34 @@ class raw_hover_env(AECEnv, EzPickle):
 
         # collect reward if it is the last agent to act
         if self._agent_selector.is_last():
-            # send the action to the aviary and update
-            self.aviary.set_all_setpoints(self._actions)
-            self.aviary.step()
-            self._past_actions = deepcopy(self._actions)
+            for _ in range(self.env_step_ratio):
+                # if we've already ended, don't continue
+                if self.truncations[agent] or self.terminations[agent]:
+                    break
 
-            # rewards for all agents are placed in the .rewards dictionary
-            for agent in self.agents:
-                agent_id = self.agent_name_mapping[agent]
-                linear_distance = np.linalg.norm(
-                    self.aviary.state(agent_id)[-1] - self._start_pos[agent_id]
-                )
+                # send the action to the aviary and update
+                self.aviary.set_all_setpoints(self._actions)
+                self.aviary.step()
+                self._past_actions = deepcopy(self._actions)
 
-                # how far are we from 0 roll pitch
-                angular_distance = np.linalg.norm(self.aviary.state(agent_id)[1][:2])
+                # rewards for all agents are placed in the .rewards dictionary
+                for agent in self.agents:
+                    agent_id = self.agent_name_mapping[agent]
+                    linear_distance = np.linalg.norm(
+                        self.aviary.state(agent_id)[-1] - self._start_pos[agent_id]
+                    )
 
-                # add reward to agent
-                self.rewards[agent] = -float(linear_distance + angular_distance)
+                    # how far are we from 0 roll pitch
+                    angular_distance = np.linalg.norm(self.aviary.state(agent_id)[1][:2])
 
-                # truncations and terminations
-                self.truncations[agent] = bool(self.aviary.elapsed_time > self.step_limit)
-                self.terminations[agent] = bool(self.aviary.contact_array.sum() > 0)
+                    # add reward to agent
+                    self.rewards[agent] = -float(linear_distance + angular_distance)
+
+                    # truncations and terminations
+                    self.truncations[agent] = bool(self.aviary.elapsed_time > self.max_steps)
+                    self.terminations[agent] = bool(self.aviary.contact_array.sum() > 0)
+                    if len(self.agents) >=2:
+                        print('self.agents')
         else:
             self._clear_rewards()
 
@@ -218,20 +238,42 @@ class raw_hover_env(AECEnv, EzPickle):
         self._accumulate_rewards()
 
 
+def api_test():
+    from pettingzoo.test import parallel_api_test
+    import hover_v0
+    import numpy as np
+
+    start_pos = np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]])
+    start_orn = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    drone_type = ["quadx", "quadx"]
+
+    env = hover_v0.parallel_env(
+        start_pos=start_pos,
+        start_orn=start_orn,
+        render_mode=None,
+        drone_type=drone_type
+    )
+    parallel_api_test(env, num_cycles=1000)
+
+
 if __name__ == "__main__":
+
+    api_test()
+
     env = hover_env(render_mode="human")
     env.reset(seed=42)
 
     for agent in env.agent_iter():
         observation, reward, termination, truncation, info = env.last()
-        print(reward)
+        print(observation)
 
         if termination or truncation:
             action = None
         else:
             # this is where you would insert your policy
-            # action = env.action_space(agent).sample()
-            action = np.array([0.0, 0.0, 0.0, 0.0])
+            action = env.action_space(agent).sample()
+            #action = np.array([0.0, 0.0, 0.0, 0.0])
 
         env.step(action)
     env.close()
+

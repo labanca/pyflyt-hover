@@ -9,8 +9,9 @@ import supersuit as ss
 from stable_baselines3 import PPO
 from stable_baselines3.ppo import MlpPolicy
 from stable_baselines3.common.utils import get_device
+from datetime import datetime
 
-import hover_v0
+from envs.labanca import hover_v0
 
 
 def train_pyflyt_supersuit(
@@ -21,7 +22,7 @@ def train_pyflyt_supersuit(
     env = env_fn.parallel_env(**env_kwargs)
     #env = ss.black_death_v3(env)
 
-    device = get_device(device='cpu')
+    device = get_device(device='cuda')
     env.reset(seed=seed)
 
     print(f"Starting training on {str(env.metadata['name'])}.")
@@ -56,13 +57,17 @@ def train_pyflyt_supersuit(
     print("Model has been saved.")
     with open(f'{model_name}.txt', 'w') as file:
         # Write a string to the file
-        file.write(f'{model.num_timesteps=}')
-        file.write(f'{model.start_time=}')
-        file.write(f'{model.policy_kwargs=}')
-        file.write(f'{model.device=}')
-        file.write(f'{model.learning_rate=}')
-        file.write(f'{model.policy=}')
-        file.write(f'{env_fn.parallel_env.ste}')
+        file.write(f'{model.num_timesteps=}\n')
+        start_datetime = datetime.fromtimestamp(model.start_time / 1e9)
+        current_time = datetime.now()
+        elapsed_time = current_time - start_datetime
+        file.write(f'model.start_datetime={start_datetime}\n')
+        file.write(f'completion_datetime={current_time}\n')
+        file.write(f'elapsed_time={elapsed_time}\n')
+        file.write(f'{model.policy_kwargs=}\n')
+        file.write(f'{model.device=}\n')
+        file.write(f'{model.learning_rate=}\n')
+        file.write(f'{model.policy=}\n')
 
     print(f"Finished training on {str(env.unwrapped.metadata['name'])}.")
 
@@ -110,6 +115,7 @@ def eval(env_fn, num_games: int = 100, render_mode: str | None = None, **env_kwa
             env.step(act)
             print(f'{env.env.aviary.elapsed_time=}{env.terminations=}{env.truncations=}')
             print(f'{act}')
+            print(reward)
     env.close()
 
     avg_reward = sum(rewards.values()) / len(rewards.values())
@@ -122,8 +128,8 @@ if __name__ == "__main__":
     env_fn = hover_v0
 
     # mode 0: vp, vq, vr, T: angular velocities + Thrust
-
-    start_pos = np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]])
+    start_pos = np.array([[-1.0, 1.0, 2.0]])
+    #start_pos = np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]])
     #start_pos = np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0], [-1.0, 1.0, 1.0],[1.0, -1.0, 1.0], [-1.0, 1.0, 2.0], [-2.0, 2.0, 1.0], [-2.0, 1.0, 1.0] ])
     start_orn = np.zeros_like (start_pos)
     drone_type = ["quadx"] * start_pos.shape[0]
@@ -131,16 +137,16 @@ if __name__ == "__main__":
     env_kwargs = {
         'start_pos': start_pos,
         'start_orn': start_orn,
-        'drone_type': drone_type,
+        #'render_mode': None,
     }
 
-    steps = 1_000_000
+    steps = 2000_000
 
     # Train a model (takes ~3 minutes on GPU)
-    #train_pyflyt_supersuit(env_fn, steps=steps, seed=0,  **env_kwargs)
+    #train_pyflyt_supersuit(env_fn, steps=steps, seed=42,  **env_kwargs)
 
     # Evaluate 10 games (average reward should be positive but can vary significantly)
     #eval(env_fn, num_games=10, **env_kwargs)
 
     # Watch 2 games
-    eval(env_fn, num_games=1, render_mode="human", **env_kwargs)
+    eval(env_fn, num_games=10, render_mode="human", **env_kwargs)
