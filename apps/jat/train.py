@@ -29,7 +29,7 @@ def train_pyflyt_supersuit(
     print(f"Starting training on {str(env.metadata['name'])}.")
 
     env = ss.pettingzoo_env_to_vec_env_v1(env)
-    env = ss.concat_vec_envs_v1(env, 2, num_cpus=10, base_class="stable_baselines3")
+    env = ss.concat_vec_envs_v1(env, 1, num_cpus=10, base_class="stable_baselines3")
 
 
     batch_size = 256
@@ -59,6 +59,7 @@ def train_pyflyt_supersuit(
         # Write a string to the file
         file.write(f'{model.num_timesteps=}\n')
         file.write(f'{device=}\n')
+        file.write(f'{start_pos=}\n')
         start_datetime = datetime.fromtimestamp(model.start_time / 1e9)
         current_time = datetime.now()
         elapsed_time = current_time - start_datetime

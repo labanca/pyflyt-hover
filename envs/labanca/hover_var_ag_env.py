@@ -33,43 +33,29 @@ class raw_hover_env(AECEnv, EzPickle):
     metadata = {"render_modes": ["human"], "name": "pyflyt_hover", "is_parallelizable": True}
 
     def __init__(self,
-                 start_pos=np.array([[-1.0, 0.0, 1.0], [1.0, 0.0, 1.0]]),
-                 start_orn=np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]),
+                 start_pos = np.array([[-1.0, 0.0, 1.0], [1.0, 0.0, 1.0]]),
+                 start_orn = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]]),
                  render_mode=None,
                  agent_hz: int = 30,
                  max_duration_seconds: float = 10.0,
-                 spawn_settings: dict() = None,
                  *args, **kwargs
                 ):
-        EzPickle.__init__(self, start_pos=start_pos,
-                          start_orn=start_orn,
-                          render_mode=render_mode,
-                          agent_hz=agent_hz,
-                          max_duration_seconds=max_duration_seconds,
-                          spawn_settings=spawn_settings,
-                          *args, **kwargs)
-
+        EzPickle.__init__(self, start_pos,  start_orn, render_mode, agent_hz, max_duration_seconds, *args, **kwargs)
         AECEnv.__init__(self)
 
         super().__init__()
 
-        self.spawn_settings = spawn_settings
-        self.start_pos= generate_initial_positions(
-            self.spawn_settings['num_drones'],
-            self.spawn_settings['min_distance'],
-            self.spawn_settings['spawn_radius'],
-            self.spawn_settings['center'],
-        )
-
-        self._start_orn = np.zeros_like(self.start_pos)
-        num_agents = len(self.start_pos)
+        self._start_pos = start_pos
+        self._start_orn = np.zeros_like(self._start_pos)
+        num_agents = len(self._start_pos)
+        #self.step_limit = 300
         self.max_steps = int(agent_hz * max_duration_seconds)
         self.env_step_ratio = int(120 / agent_hz)
 
 
         self.render_mode = render_mode is not None
         self.aviary = Aviary(
-            start_pos=self.start_pos, start_orn=self._start_orn, drone_type="quadx", render=self.render_mode
+            start_pos=self._start_pos, start_orn=self._start_orn, drone_type="quadx", render=self.render_mode
         )
         self.aviary.set_mode(0)
 
@@ -82,38 +68,19 @@ class raw_hover_env(AECEnv, EzPickle):
 
 
         # we define the action space
-        # high = np.array(
-        #     [
-        #         3.0,
-        #         3.0,
-        #         3.0,
-        #         1.0,
-        #     ]
-        # )
-        # low = np.array(
-        #     [
-        #         -3.0,
-        #         -3.0,
-        #         -3.0,
-        #         0.0,
-        #     ]
-        # )
-
-        angular_rate_limit = np.pi
-        thrust_limit = 1.0
         high = np.array(
             [
-                angular_rate_limit,
-                angular_rate_limit,
-                angular_rate_limit,
-                thrust_limit,
+                3.0,
+                3.0,
+                3.0,
+                1.0,
             ]
         )
         low = np.array(
             [
-                -angular_rate_limit,
-                -angular_rate_limit,
-                -angular_rate_limit,
+                -3.0,
+                -3.0,
+                -3.0,
                 0.0,
             ]
         )
@@ -171,7 +138,7 @@ class raw_hover_env(AECEnv, EzPickle):
                 *lin_pos,
                 *self._past_actions[agent_id],
                 *self.aviary.aux_state(0),
-                *self.start_pos[agent_id] - lin_pos
+                *self._start_pos[agent_id]
             ]
         )
 
@@ -198,25 +165,15 @@ class raw_hover_env(AECEnv, EzPickle):
         self.terminations = {agent: False for agent in self.agents}
         self.truncations = {agent: False for agent in self.agents}
         self.infos = {agent: {} for agent in self.agents}
-        self.step_count = 0
 
         # Our agent_selector utility allows easy cyclic stepping through the agents list.
         self._agent_selector = agent_selector(self.agents)
         self.agent_selection = self._agent_selector.next()
 
-        self.start_pos = generate_initial_positions(
-            self.spawn_settings['num_drones'],
-            self.spawn_settings['min_distance'],
-            self.spawn_settings['spawn_radius'],
-            self.spawn_settings['center'],
-
-        )
-        self._start_orn = np.zeros_like(self.start_pos)
-
         # disconnect and rebuilt the environment
         self.aviary.disconnect()
         self.aviary = Aviary(
-            start_pos=self.start_pos, start_orn=self._start_orn, drone_type="quadx", render=bool(self.render_mode), seed=seed
+            start_pos=self._start_pos, start_orn=self._start_orn, drone_type="quadx", render=bool(self.render_mode), seed=seed
         )
         self.aviary.set_mode(0)
 
@@ -258,7 +215,7 @@ class raw_hover_env(AECEnv, EzPickle):
                 for agent in self.agents:
                     agent_id = self.agent_name_mapping[agent]
                     linear_distance = np.linalg.norm(
-                        self.aviary.state(agent_id)[-1] - self.start_pos[agent_id]
+                        self.aviary.state(agent_id)[-1] - self._start_pos[agent_id]
                     )
 
                     # how far are we from 0 roll pitch
@@ -268,10 +225,9 @@ class raw_hover_env(AECEnv, EzPickle):
                     self.rewards[agent] = -float(linear_distance + angular_distance)
 
                     # truncations and terminations
-                    #self.truncations[agent] = bool(self.aviary.elapsed_time > self.max_steps)
-                    self.truncations[agent] = bool(self.step_count > self.max_steps)
+                    self.truncations[agent] = bool(self.aviary.elapsed_time > self.max_steps)
                     self.terminations[agent] = bool(self.aviary.contact_array.sum() > 0)
-            self.step_count+=1
+
         else:
             self._clear_rewards()
 
@@ -297,23 +253,6 @@ def api_test():
         drone_type=drone_type
     )
     parallel_api_test(env, num_cycles=1000)
-
-def generate_initial_positions(num_drones, min_distance, spawn_radius, center):
-    start_pos = np.empty((num_drones, 3))
-
-    for i in range(num_drones):
-        while True:
-            # Generate random coordinates within the spawn area centered at 'center'
-            x = np.random.uniform(center[0] - spawn_radius, center[0] + spawn_radius)
-            y = np.random.uniform(center[1] - spawn_radius, center[1] + spawn_radius)
-            z = np.random.uniform(center[2], center[2] + spawn_radius)  # Ensure z-axis is non-negative
-
-            # Check if the minimum distance condition is met with existing drones
-            if i == 0 or np.min(np.linalg.norm(start_pos[:i] - np.array([x, y, z]), axis=1)) >= min_distance:
-                start_pos[i] = [x, y, z]
-                break
-
-    return start_pos
 
 
 if __name__ == "__main__":

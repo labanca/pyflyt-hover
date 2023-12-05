@@ -27,3 +27,44 @@ class raw_hover_env(MAQuadXHoverEnv, AECEnv, EzPickle):
                  ):
         MAQuadXHoverEnv.__init__(self, *args, **kwargs)
         EzPickle.__init__(self, *args, **kwargs)
+
+
+def api_test():
+    from pettingzoo.test import parallel_api_test
+    import hover_v0
+    import numpy as np
+
+    start_pos = np.array([[0.0, 0.0, 1.0], [1.0, 1.0, 2.0]])
+    start_orn = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    drone_type = ["quadx", "quadx"]
+
+    env = hover_v0.parallel_env(
+        start_pos=start_pos,
+        start_orn=start_orn,
+        render_mode=None,
+        #drone_type=drone_type
+    )
+    parallel_api_test(env, num_cycles=1000)
+
+
+if __name__ == "__main__":
+
+    api_test()
+
+    env = hover_env(render_mode="human")
+    env.reset(seed=42)
+
+    for agent in env.agent_iter():
+        observation, reward, termination, truncation, info = env.last()
+        print(observation)
+
+        if termination or truncation:
+            action = None
+        else:
+            # this is where you would insert your policy
+            action = env.action_space(agent).sample()
+            #action = np.array([0.0, 0.0, 0.0, 0.0])
+
+        env.step(action)
+    env.close()
+
