@@ -1,3 +1,5 @@
 .idea
 __pycache__
-models/
+apps/labanca/models/
+venv
+/models/

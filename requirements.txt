@@ -4,3 +4,9 @@ pyflyt
 pettingzoo
 supersuit
 stable_baselines3
+pandas
+matplotlib
+
+# didnt find a way to put the following in the requirements.txt. Run manually.
+# pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+
