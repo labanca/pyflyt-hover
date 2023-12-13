@@ -1,5 +1,5 @@
 import pandas as pd
-import ast  # For converting string representation of list to actual list
+
 
 import matplotlib
 matplotlib.use('TkAgg')
@@ -15,8 +15,8 @@ def plot_pos_heatmap(csv_filename):
     df = df[df['termination']]
 
 
-    plt.figure(figsize=(10, 8))
-    plt.hist2d(df['posx'], df['posy'], bins=(50, 50), cmap='viridis')
+    plt.figure(figsize=(15, 12))
+    plt.hist2d(df['posx'], df['posy'], bins=(20, 20), cmap='viridis')
     plt.colorbar()
 
     # Set labels and title

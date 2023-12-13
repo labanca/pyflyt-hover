@@ -120,7 +120,7 @@ def eval(env_fn, num_games: int = 100, render_mode: str | None = None, **env_kwa
                 act = model.predict(obs, deterministic=True)[0]
 
             env.step(act)
-            print(f'{env.env.aviary.elapsed_time=}{env.terminations=}{env.truncations=}')
+            print(f'{env.terminations=}\n{env.truncations=}\n')
             print(f'{act}')
     env.close()
 
@@ -218,9 +218,9 @@ if __name__ == "__main__":
     env_fn = hover_v0
 
     spawn_settings = dict(
-        num_drones = 3,
-        min_distance = 1.0,
-        spawn_radius = 2.0,
+        num_drones = 15,
+        min_distance = 2.0,
+        spawn_radius = 10.0,
         center = (0, 0, 0),
     )
     # mode 0: vp, vq, vr, T: angular velocities + Thrust
@@ -248,7 +248,7 @@ if __name__ == "__main__":
     #eval(env_fn, num_games=10, **env_kwargs)
 
     # Watch games
-    #eval(env_fn, num_games=1, render_mode="human", **env_kwargs)
+    eval(env_fn, num_games=1, render_mode="human", **env_kwargs)
 
     # eval spawn positions
-    eval_positions(env_fn, num_games=50000, render_mode=None , **env_kwargs)
+    #eval_positions(env_fn, num_games=50000, render_mode=None , **env_kwargs)

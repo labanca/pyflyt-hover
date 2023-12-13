@@ -6,6 +6,8 @@ import time
 import numpy as np
 import supersuit as ss
 import torch
+from gymnasium.utils import EzPickle
+from pettingzoo.utils import parallel_to_aec
 
 from stable_baselines3 import PPO
 from stable_baselines3.ppo import MlpPolicy
@@ -128,8 +130,53 @@ def eval(env_fn, num_games: int = 100, render_mode: str | None = None, **env_kwa
     return avg_reward
 
 
+def eval_parallel(env_fn, num_games: int = 100, render_mode: str | None = None):
+    # Evaluate a trained agent vs a random agent
+    env = env_fn(render_mode=render_mode)
+    env = parallel_to_aec(env)
+
+    print(
+        f"\nStarting evaluation on {str(env.metadata['name'])} (num_games={num_games}, render_mode={render_mode})"
+    )
+
+    # try:
+    #     latest_policy = max(
+    #         glob.glob(f"{env.metadata['name']}*.zip"), key=os.path.getctime
+    #     )
+    # except ValueError:
+    #     print("Policy not found.")
+    #     exit(0)
+
+    latest_policy = ('C:/projects/pyflyt-hover/apps/jat/models/quadx_v0_20231206-125329.zip')
+    model = PPO.load(latest_policy)
+
+    rewards = {agent: 0.0 for agent in env.possible_agents}
+
+    # Note: We train using the Parallel API but evaluate using the AEC API
+    # SB3 models are designed for single-agent settings, we get around this by using he same model for every agent
+    for i in range(num_games):
+        env.reset(seed=i)
+
+        for agent in env.agent_iter():
+            obs, reward, termination, truncation, info = env.last()
+
+            for a in env.agents:
+                rewards[a] += env.rewards[a]
+            if termination or truncation:
+                break
+            else:
+                act = model.predict(obs, deterministic=True)[0]
+
+            env.step(act)
+    env.close()
+
+    avg_reward = sum(rewards.values()) / len(rewards.values())
+    print("Rewards: ", rewards)
+    print(f"Avg reward: {avg_reward}")
+    return avg_reward
+
 if __name__ == "__main__":
-    env_fn = hover_v0
+    env_fn = hover_v0.parallel_env
 
     # mode 0: vp, vq, vr, T: angular velocities + Thrust
     #start_pos = np.array([[-1.0, 1.0, 2.0]])
@@ -152,4 +199,7 @@ if __name__ == "__main__":
     #eval(env_fn, num_games=10, **env_kwargs)
 
     # Watch 2 games
-    eval(env_fn, num_games=10, render_mode="human", **env_kwargs)
+    #eval(env_fn, num_games=10, render_mode="human", **env_kwargs)
+
+    #eval parallel env train
+    eval_parallel(env_fn, num_games=10, render_mode="human")
